@@ -1,0 +1,17 @@
+{
+  "name": "mssql-explorer-mcp",
+  "version": "3.2.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mssql-explorer-mcp": "server.js"
+  },
+  "scripts": {
+    "setup": "node setup.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.4.0",
+    "mssql": "^11.0.1"
+  }
+}

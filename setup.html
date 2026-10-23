@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>mssql-explorer setup</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #0f1115; color: #e6e8eb; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 100px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #9aa4b2; margin: 0 0 24px; font-size: 14px; }
+  .card { background: #171a21; border: 1px solid #262b36; border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+  .card h2 { font-size: 15px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .04em; color: #b7c0cd; }
+  .hint { color: #9aa4b2; font-size: 12px; margin: 0 0 14px; }
+  label { display: block; font-size: 13px; color: #b7c0cd; margin: 12px 0 4px; }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid #303643;
+    background: #0f1115; color: #e6e8eb; font-size: 14px; font-family: inherit;
+  }
+  textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+  .conn { border: 1px solid #262b36; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .conn .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .conn .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  button { cursor: pointer; border: 1px solid #303643; background: #222834; color: #e6e8eb; padding: 9px 14px; border-radius: 8px; font-size: 14px; }
+  button:hover { background: #2b3240; }
+  button.primary { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+  button.primary:hover { background: #2f6fe0; }
+  button.small { padding: 6px 10px; font-size: 12px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+  .muted { color: #9aa4b2; font-size: 12px; }
+  .pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid #303643; }
+  .ok { color: #34d399; border-color: #1f6f52; }
+  .bad { color: #f87171; border-color: #7f2d2d; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #222834; border: 1px solid #303643; padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 80%; }
+  .toast.show { opacity: 1; }
+  code { background: #0f1115; padding: 1px 6px; border-radius: 6px; border: 1px solid #303643; font-size: 12px; word-break: break-all; }
+  pre { background: #0f1115; border: 1px solid #303643; border-radius: 8px; padding: 12px; overflow: auto; font-size: 12px; }
+  .rowhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .testout { font-size: 12px; margin-left: 4px; }
+  #previewList { margin-top: 10px; max-height: 360px; overflow: auto; }
+  .prow { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid #262b36; font-size: 12px; flex-wrap: wrap; }
+  .prow .pname { font-weight: 600; min-width: 180px; }
+  .prow .pinfo { color: #9aa4b2; flex: 1; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>mssql-explorer setup</h1>
+  <p class="sub">Define your database connections, choose access levels, configure the VPN, and connect the server to Claude Desktop. Everything stays on this machine.</p>
+
+  <div class="card">
+    <h2>Defaults</h2>
+    <p class="hint">Applied to any connection that doesn't set its own value.</p>
+    <div class="grid2">
+      <div>
+        <label>Default access level</label>
+        <select id="defAccess">
+          <option value="read">Read-only (SELECT/WITH)</option>
+          <option value="readwrite">Read-write (+ INSERT/UPDATE/DELETE)</option>
+          <option value="full">Full (+ DDL, EXEC, procs)</option>
+        </select>
+      </div>
+      <div>
+        <label>Default port</label>
+        <input type="number" id="defPort" placeholder="1433" />
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Connections</h2>
+    <p class="hint">Name each connection whatever you like. Access level controls what queries are allowed.</p>
+    <div id="connList"></div>
+    <div class="actions">
+      <button class="small" id="addConn">+ Add connection</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Templates <span class="muted">(advanced, optional)</span></h2>
+    <p class="hint">Auto-generate many connections from a naming pattern. Leave as <code>[]</code> if you don't need it. Edited as raw JSON: a list of templates. Pasting a whole <code>db.config.json</code> here loads it into the entire form.</p>
+    <textarea id="templates">[]</textarea>
+    <div class="actions">
+      <button class="small" id="previewBtn">Preview generated connections</button>
+      <span id="previewState" class="testout"></span>
+    </div>
+    <div id="previewList"></div>
+  </div>
+
+  <div class="card">
+    <h2>VPN</h2>
+    <p class="hint">Choose how the server handles the network. For Azure Entra ID / OAuth VPNs (sign-in with MFA), use "Detect &amp; wait" and connect the Azure VPN Client yourself, or "Launch command" to have the server start it (a sign-in window will appear).</p>
+    <label>Mode</label>
+    <select id="vpnMode">
+      <option value="none">None (database is directly reachable)</option>
+      <option value="wait">Detect &amp; wait (you connect the VPN manually)</option>
+      <option value="command">Launch command (server runs a connect command)</option>
+    </select>
+    <div id="vpnCommandBox" style="display:none">
+      <label>Connect command</label>
+      <input type="text" id="vpnConnectCommand" placeholder='azurevpn -c "C:\path\profile.xml" -n "MyVPN"' />
+      <p class="hint">Space-separated or a JSON array. For OAuth this launches the client and a sign-in / MFA window appears.</p>
+      <label>Disconnect command (optional)</label>
+      <input type="text" id="vpnDisconnectCommand" placeholder="azurevpn -d" />
+    </div>
+    <div id="vpnProbeBox" style="display:none">
+      <div class="grid2">
+        <div>
+          <label>Probe host (optional)</label>
+          <input type="text" id="vpnProbeHost" placeholder="leave blank to probe each database host" />
+        </div>
+        <div>
+          <label>Probe port</label>
+          <input type="number" id="vpnProbePort" placeholder="1433" />
+        </div>
+      </div>
+      <div class="grid3">
+        <div>
+          <label>Connect timeout (ms)</label>
+          <input type="number" id="vpnConnectTimeoutMs" placeholder="120000" />
+        </div>
+        <div>
+          <label>Probe timeout (ms)</label>
+          <input type="number" id="vpnProbeTimeoutMs" placeholder="3000" />
+        </div>
+        <div>
+          <label>Probe interval (ms)</label>
+          <input type="number" id="vpnProbeIntervalMs" placeholder="2000" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Save &amp; connect</h2>
+    <div class="actions">
+      <button class="primary" id="saveBtn">Save configuration</button>
+      <button class="primary" id="registerBtn">Connect to Claude Desktop</button>
+      <span id="regState" class="testout"></span>
+    </div>
+    <p class="muted" style="margin-top:14px">Claude Desktop config: <code id="claudePath"></code></p>
+    <p class="muted">After connecting, fully quit and reopen Claude Desktop.</p>
+    <details style="margin-top:10px">
+      <summary class="muted">Manual snippet (fallback)</summary>
+      <pre id="snippet"></pre>
+    </details>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function el(id) { return document.getElementById(id); }
+
+function toast(msg, good) {
+  const t = el("toast");
+  t.textContent = msg;
+  t.style.borderColor = good === false ? "#7f2d2d" : "#303643";
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 3200);
+}
+
+function accessOptions(selected) {
+  const levels = [["read", "Read-only"], ["readwrite", "Read-write"], ["full", "Full"]];
+  return levels.map((l) => '<option value="' + l[0] + '"' + (l[0] === selected ? " selected" : "") + ">" + l[1] + "</option>").join("");
+}
+
+function connCard(name, conn) {
+  conn = conn || {};
+  const auth = conn.auth || {};
+  const wrap = document.createElement("div");
+  wrap.className = "conn";
+  wrap.innerHTML =
+    '<div class="rowhead"><strong>Connection</strong><button class="small conn-remove">Remove</button></div>' +
+    '<div class="grid">' +
+      '<div><label>Name</label><input type="text" class="c-name" value="' + (name || "") + '" placeholder="my-app-dev" /></div>' +
+      '<div><label>Access</label><select class="c-access">' + accessOptions(conn.access || "") + '</select></div>' +
+    '</div>' +
+    '<div class="grid">' +
+      '<div><label>Host</label><input type="text" class="c-host" value="' + (conn.host || "") + '" placeholder="server.database.windows.net" /></div>' +
+      '<div><label>Database</label><input type="text" class="c-db" value="' + (conn.database || "") + '" placeholder="MyDatabase" /></div>' +
+    '</div>' +
+    '<div class="grid4">' +
+      '<div><label>User</label><input type="text" class="c-user" value="' + (auth.user || conn.user || "") + '" /></div>' +
+      '<div><label>Password</label><input type="password" class="c-pass" value="' + (auth.password || conn.password || "") + '" /></div>' +
+      '<div><label>Port</label><input type="number" class="c-port" value="' + (conn.port || "") + '" placeholder="1433" /></div>' +
+      '<div><label>&nbsp;</label><button class="small c-test">Test</button></div>' +
+    '</div>' +
+    '<div class="c-testout testout"></div>';
+  wrap.querySelector(".conn-remove").onclick = () => wrap.remove();
+  wrap.querySelector(".c-test").onclick = async () => {
+    const out = wrap.querySelector(".c-testout");
+    out.textContent = "Testing...";
+    const payload = {
+      host: wrap.querySelector(".c-host").value.trim(),
+      database: wrap.querySelector(".c-db").value.trim(),
+      user: wrap.querySelector(".c-user").value.trim(),
+      password: wrap.querySelector(".c-pass").value,
+      port: Number(wrap.querySelector(".c-port").value) || Number(el("defPort").value) || 1433
+    };
+    try {
+      const r = await fetch("/api/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const data = await r.json();
+      out.innerHTML = data.ok ? '<span class="pill ok">Connected</span>' : '<span class="pill bad">Failed</span> ' + (data.error || "");
+    } catch (e) {
+      out.innerHTML = '<span class="pill bad">Failed</span> ' + e.message;
+    }
+  };
+  return wrap;
+}
+
+function addConn(name, conn) {
+  el("connList").appendChild(connCard(name, conn));
+}
+
+function updateVpnVisibility() {
+  const mode = el("vpnMode").value;
+  el("vpnCommandBox").style.display = mode === "command" ? "block" : "none";
+  el("vpnProbeBox").style.display = mode === "none" ? "none" : "block";
+}
+
+function commandToText(cmd) {
+  if (!cmd) return "";
+  if (Array.isArray(cmd)) return JSON.stringify(cmd);
+  return String(cmd);
+}
+
+function textToCommand(text) {
+  const t = (text || "").trim();
+  if (!t) return [];
+  if (t.startsWith("[")) {
+    try { return JSON.parse(t); } catch { return []; }
+  }
+  return t.split(/\s+/);
+}
+
+function isFullConfig(v) {
+  return v && typeof v === "object" && !Array.isArray(v) &&
+    ("templates" in v || "connections" in v || "defaults" in v || "vpn" in v);
+}
+
+// Interprets the Templates textarea. Accepts a list of templates, a single template
+// object, or a whole db.config.json (optionally wrapped in [ ]).
+function parseTemplatesInput(text) {
+  let parsed;
+  try { parsed = JSON.parse((text || "").trim() || "[]"); } catch (e) { throw new Error("Templates JSON is invalid: " + e.message); }
+  if (Array.isArray(parsed) && parsed.length === 1 && isFullConfig(parsed[0])) parsed = parsed[0];
+  if (isFullConfig(parsed)) return { fullConfig: parsed };
+  const templates = Array.isArray(parsed) ? parsed : [parsed];
+  templates.forEach((t, i) => {
+    const label = "Template " + (i + 1);
+    if (!t || typeof t !== "object" || Array.isArray(t)) throw new Error(label + " must be an object");
+    if (!t.hostTemplate) throw new Error(label + " is missing hostTemplate");
+    if (!t.databaseTemplate) throw new Error(label + " is missing databaseTemplate");
+    const vars = t.variables || {};
+    if (typeof vars !== "object" || Array.isArray(vars)) throw new Error(label + ": variables must be an object");
+    const used = ((t.nameTemplate || "") + (t.hostTemplate || "") + (t.databaseTemplate || "")).match(/\{(\w+)\}/g) || [];
+    used.map((u) => u.slice(1, -1)).forEach((v) => {
+      if (!(v in vars)) throw new Error(label + ": placeholder {" + v + "} has no matching entry in variables");
+    });
+  });
+  return { templates: templates };
+}
+
+function loadTemplatesInput() {
+  const parsed = parseTemplatesInput(el("templates").value);
+  if (parsed.fullConfig) {
+    fill(parsed.fullConfig);
+    toast("Detected a full configuration and loaded it into the form", true);
+    return parsed.fullConfig.templates || [];
+  }
+  return parsed.templates;
+}
+
+function renderPreview(targets) {
+  const list = el("previewList");
+  list.innerHTML = "";
+  el("previewState").textContent = targets.length + " connection" + (targets.length === 1 ? "" : "s");
+  targets.forEach((t) => {
+    const row = document.createElement("div");
+    row.className = "prow";
+    const name = document.createElement("span");
+    name.className = "pname";
+    name.textContent = t.name;
+    const info = document.createElement("span");
+    info.className = "pinfo";
+    info.textContent = t.host + " / " + t.database + " · " + (t.user || "(no user)") + (t.hasPassword ? "" : " · no password") + " · " + t.access;
+    const btn = document.createElement("button");
+    btn.className = "small";
+    btn.textContent = "Test";
+    const out = document.createElement("span");
+    out.className = "testout";
+    btn.onclick = async () => {
+      out.textContent = "Testing...";
+      try {
+        const r = await fetch("/api/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: buildConfig(), name: t.name }) });
+        const data = await r.json();
+        out.innerHTML = data.ok ? '<span class="pill ok">Connected</span>' : '<span class="pill bad">Failed</span> ';
+        if (!data.ok) out.appendChild(document.createTextNode(data.error || ""));
+      } catch (e) {
+        out.innerHTML = '<span class="pill bad">Failed</span> ';
+        out.appendChild(document.createTextNode(e.message));
+      }
+    };
+    row.append(name, info, btn, out);
+    list.appendChild(row);
+  });
+}
+
+async function preview() {
+  let config;
+  try { loadTemplatesInput(); config = buildConfig(); } catch (e) { toast(e.message, false); el("previewState").innerHTML = '<span class="pill bad">Invalid</span>'; return; }
+  const r = await fetch("/api/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(config) });
+  const data = await r.json();
+  if (!data.ok) { toast("Preview failed: " + (data.error || ""), false); return; }
+  renderPreview(data.targets);
+}
+
+function fill(config) {
+  const defaults = config.defaults || {};
+  el("defAccess").value = defaults.access || "read";
+  el("defPort").value = defaults.port || 1433;
+
+  el("connList").innerHTML = "";
+  const conns = config.connections || {};
+  const keys = Object.keys(conns);
+  if (keys.length === 0) { addConn("", {}); }
+  keys.forEach((k) => addConn(k, conns[k]));
+
+  el("templates").value = JSON.stringify(config.templates || [], null, 2);
+
+  const v = config.vpn || {};
+  el("vpnMode").value = v.mode || "none";
+  el("vpnConnectCommand").value = commandToText(v.connectCommand);
+  el("vpnDisconnectCommand").value = commandToText(v.disconnectCommand);
+  el("vpnProbeHost").value = (v.probeTarget && v.probeTarget.host) || "";
+  el("vpnProbePort").value = (v.probeTarget && v.probeTarget.port) || 1433;
+  el("vpnConnectTimeoutMs").value = v.connectTimeoutMs || 120000;
+  el("vpnProbeTimeoutMs").value = v.probeTimeoutMs || 3000;
+  el("vpnProbeIntervalMs").value = v.probeIntervalMs || 2000;
+  updateVpnVisibility();
+}
+
+function buildConfig() {
+  const connections = {};
+  document.querySelectorAll("#connList .conn").forEach((row) => {
+    const name = row.querySelector(".c-name").value.trim();
+    if (!name) return;
+    const conn = {
+      host: row.querySelector(".c-host").value.trim(),
+      database: row.querySelector(".c-db").value.trim(),
+      auth: { type: "sql", user: row.querySelector(".c-user").value.trim(), password: row.querySelector(".c-pass").value },
+      access: row.querySelector(".c-access").value
+    };
+    const p = Number(row.querySelector(".c-port").value);
+    if (p) conn.port = p;
+    connections[name] = conn;
+  });
+
+  const parsedTemplates = parseTemplatesInput(el("templates").value);
+  if (parsedTemplates.fullConfig) throw new Error("The Templates box contains a whole configuration. Click Preview to load it into the form first.");
+  const templates = parsedTemplates.templates;
+
+  const vpn = {
+    mode: el("vpnMode").value,
+    connectCommand: textToCommand(el("vpnConnectCommand").value),
+    disconnectCommand: textToCommand(el("vpnDisconnectCommand").value),
+    connectTimeoutMs: Number(el("vpnConnectTimeoutMs").value) || 120000,
+    probeTimeoutMs: Number(el("vpnProbeTimeoutMs").value) || 3000,
+    probeIntervalMs: Number(el("vpnProbeIntervalMs").value) || 2000
+  };
+  const probeHost = el("vpnProbeHost").value.trim();
+  if (probeHost) vpn.probeTarget = { host: probeHost, port: Number(el("vpnProbePort").value) || 1433 };
+
+  return {
+    defaults: { access: el("defAccess").value, port: Number(el("defPort").value) || 1433, options: { encrypt: true, trustServerCertificate: false } },
+    connections: connections,
+    templates: templates,
+    vpn: vpn
+  };
+}
+
+async function save() {
+  let body;
+  try { loadTemplatesInput(); body = buildConfig(); } catch (e) { toast(e.message, false); return false; }
+  const r = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json();
+  toast(data.ok ? "Configuration saved" : "Save failed", data.ok);
+  return data.ok;
+}
+
+async function register() {
+  const saved = await save();
+  if (!saved) return;
+  const r = await fetch("/api/register", { method: "POST" });
+  const data = await r.json();
+  if (data.ok) {
+    el("regState").innerHTML = '<span class="pill ok">Connected</span>';
+    toast("Connected to Claude Desktop. Restart the app.", true);
+  } else {
+    toast("Connect failed: " + (data.error || ""), false);
+  }
+}
+
+async function init() {
+  const r = await fetch("/api/state");
+  const state = await r.json();
+  fill(state.config || {});
+  el("claudePath").textContent = state.claudeConfigPath || "";
+  el("snippet").textContent = JSON.stringify(state.snippet || {}, null, 2);
+  el("regState").innerHTML = state.registered ? '<span class="pill ok">Connected</span>' : '<span class="pill">Not connected</span>';
+}
+
+el("addConn").onclick = () => addConn("", {});
+el("previewBtn").onclick = preview;
+el("templates").addEventListener("paste", () => setTimeout(() => { try { if (parseTemplatesInput(el("templates").value).fullConfig) preview(); } catch {} }, 0));
+el("vpnMode").onchange = updateVpnVisibility;
+el("saveBtn").onclick = save;
+el("registerBtn").onclick = register;
+init();
+</script>
+</body>
+</html>

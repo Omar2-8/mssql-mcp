@@ -1,0 +1,34 @@
+{
+  "_help": {
+    "about": "Copy this file to db.config.json and fill in your own values. db.config.json is gitignored.",
+    "defaults": "Applied to any connection that omits a value. access can be read, readwrite, or full.",
+    "access": "read = SELECT/WITH only. readwrite = also INSERT/UPDATE/DELETE/MERGE. full = also DDL and EXEC.",
+    "connections": "Define one entry per database. The key is the connection name you use in Claude.",
+    "templates": "Optional. Generate many connections from a pattern. {var} placeholders come from variables. A variable is a list of values, or a map of value to per-value overrides (password, access, etc.). Leave templates as [] if unused.",
+    "vpn": "mode = none (direct), wait (you connect the VPN yourself; use for Entra ID/OAuth+MFA), or command (server runs connectCommand). For wait/command, probeTarget is optional.",
+    "docs": "See README.md for full details and examples."
+  },
+  "defaults": {
+    "port": 1433,
+    "access": "read",
+    "options": { "encrypt": true, "trustServerCertificate": false }
+  },
+  "connections": {
+    "example": {
+      "host": "server.database.windows.net",
+      "database": "YourDatabase",
+      "auth": { "type": "sql", "user": "your-username", "password": "REPLACE_ME" },
+      "access": "read"
+    }
+  },
+  "templates": [],
+  "vpn": {
+    "mode": "none",
+    "connectCommand": [],
+    "disconnectCommand": [],
+    "probeTarget": { "host": "", "port": 1433 },
+    "connectTimeoutMs": 120000,
+    "probeTimeoutMs": 3000,
+    "probeIntervalMs": 2000
+  }
+}
